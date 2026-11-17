@@ -106,7 +106,15 @@ final class AppModel: ObservableObject {
         loginProcess = ClaudeCodeClient.startLogin()
         guard loginProcess != nil else { return }
         loggingIn = true
+        let process = loginProcess
         Task {
+            // 앱 안에서 바로 실패하면(터미널이 필요한 경우 등) 터미널로 로그인
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            if let process, !process.isRunning, process.terminationStatus != 0,
+               await ClaudeCodeClient.isLoggedIn() != true {
+                DebugLog.log("login: 앱 안 로그인 실패(status=\(process.terminationStatus)) → 터미널로")
+                ClaudeCodeClient.loginInTerminal()
+            }
             // 브라우저에서 로그인을 마칠 때까지 최대 3분 동안 확인
             for _ in 0..<90 {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)

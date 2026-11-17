@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 /// 설치된 Claude Code CLI(`claude -p`)를 통해 질문한다.
@@ -52,13 +53,29 @@ struct ClaudeCodeClient {
         guard let bin = binaryPath else { return nil }
         let p = Process()
         p.executableURL = URL(fileURLWithPath: bin)
-        p.arguments = ["auth", "login"]
+        p.arguments = ["auth", "login", "--claudeai"]
         p.environment = environment
         p.standardInput = Pipe()
         p.standardOutput = Pipe()
         p.standardError = Pipe()
         try? p.run()
         return p
+    }
+
+    /// 터미널 창을 열어 로그인 명령을 실행한다 (앱 안에서 로그인이 안 될 때의 대안).
+    static func loginInTerminal() {
+        guard let bin = binaryPath else { return }
+        let script = FileManager.default.temporaryDirectory.appendingPathComponent("tailquestions-login.command")
+        let body = """
+        #!/bin/bash
+        echo "TailQuestions: Claude 계정으로 로그인해요. 브라우저가 열리면 승인해 주세요."
+        "\(bin)" auth login --claudeai
+        echo
+        echo "✅ 끝났으면 이 창을 닫고 TailQuestions로 돌아가세요."
+        """
+        try? body.write(to: script, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        NSWorkspace.shared.open(script)
     }
 
     var binary: String

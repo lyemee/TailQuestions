@@ -630,9 +630,14 @@ struct OnboardingView: View {
                          title: "Claude 계정 로그인",
                          detail: "Claude 앱과 같은 계정으로 로그인해요. 브라우저가 열리면 승인하세요.") {
                     if model.setup.loggedIn != true {
-                        Button(model.loggingIn ? "브라우저에서 로그인 기다리는 중…" : "로그인") { model.login() }
-                            .buttonStyle(PillButtonStyle())
-                            .disabled(model.setup.claudeCodePath == nil || model.loggingIn)
+                        HStack(spacing: 8) {
+                            Button(model.loggingIn ? "브라우저에서 로그인 기다리는 중…" : "로그인") { model.login() }
+                                .buttonStyle(PillButtonStyle())
+                                .disabled(model.setup.claudeCodePath == nil || model.loggingIn)
+                            Button("터미널에서 로그인") { ClaudeCodeClient.loginInTerminal() }
+                                .buttonStyle(PillButtonStyle(prominent: false))
+                                .disabled(model.setup.claudeCodePath == nil)
+                        }
                     }
                 }
 
