@@ -53,7 +53,7 @@ curl -fsSL https://raw.githubusercontent.com/lyemee/TailQuestions/main/install.s
 <summary>직접 내려받아 설치하기</summary>
 
 1. [Releases](https://github.com/lyemee/TailQuestions/releases/latest)에서 `TailQuestions.zip`을 내려받아 압축을 풀어요.
-2. `TailQuestions.app`을 `응용 프로그램` 폴더로 옮겨요.
+2. `TailQuestions.app`을 `응용 프로그램`(`/Applications`) 폴더로 옮겨요.
 3. 처음 열 때 "확인되지 않은 개발자" 경고가 뜨면
    시스템 설정 → 개인정보 보호 및 보안 → 아래쪽의 **"그래도 열기"** 를 눌러요.
 
@@ -69,7 +69,7 @@ curl -fsSL https://raw.githubusercontent.com/lyemee/TailQuestions/main/install.s
 |---|---|
 | **① Claude Code 설치** | 도우미에 있는 명령을 복사해 터미널에서 실행해요.<br>Claude 구독으로 답하기 위해 필요해요. |
 | **② Claude 로그인** | `로그인` 버튼 → 브라우저에서 **Claude 앱과 같은 계정**으로 승인해요. |
-| **③ 손쉬운 사용 권한** | `설정 열기` → 목록에서 **TailQuestions**를 켜요.<br>Claude 화면의 대화를 읽기 위해 필요해요. |
+| **③ 손쉬운 사용 권한** | `설정 열기` → 목록에 이미 있는 **TailQuestions**의 스위치를 켜요.<br>Claude 화면의 대화를 읽기 위해 필요해요. |
 
 모두 체크되면 **시작하기**를 눌러요.
 
@@ -125,8 +125,8 @@ curl -fsSL https://raw.githubusercontent.com/lyemee/TailQuestions/main/install.s
 
 | 증상 | 해결 |
 |---|---|
-| `⌥ ⇧ Space` 를 눌러도 반응이 없음 | 메뉴바에 아이콘이 있는지 확인 (없으면 `open ~/Applications/TailQuestions.app`) |
-| "권한이 꺼져 있어요" 경고 | 손쉬운 사용 목록에서 TailQuestions를 **−** 로 지우고 다시 **+** 로 추가 |
+| `⌥ ⇧ Space` 를 눌러도 반응이 없음 | 메뉴바에 아이콘이 있는지 확인 (없으면 `open /Applications/TailQuestions.app`) |
+| "권한이 꺼져 있어요" 경고 | 손쉬운 사용 목록에서 TailQuestions 스위치를 켜기. 켜져 있는데도 안 되면 **−** 로 지우고 **+** → 응용 프로그램 → TailQuestions 로 다시 추가 |
 | "로그인되어 있지 않아요" 오류 | ⚙️ 설정 → 설정 도우미 다시 보기 → 로그인 |
 | "사용 한도에 도달" 오류 | 구독 사용량 한도예요. 잠시 후 다시 시도 |
 | 트리에 대화가 안 보임 | 트리의 ↻ 버튼으로 다시 읽기. 계속 안 되면 `debug.log` 와 함께 이슈로 알려주세요 |
@@ -143,7 +143,7 @@ curl -fsSL https://raw.githubusercontent.com/lyemee/TailQuestions/main/install.s
 
 ```bash
 pkill -x TailQuestions
-rm -rf ~/Applications/TailQuestions.app ~/Library/Application\ Support/TailQuestions
+rm -rf /Applications/TailQuestions.app ~/Applications/TailQuestions.app ~/Library/Application\ Support/TailQuestions
 ```
 
 시스템 설정의 손쉬운 사용·로그인 항목 목록에서도 TailQuestions를 지워 주세요.
@@ -163,7 +163,7 @@ Xcode 없이 Command Line Tools(`xcode-select --install`)만 있으면 돼요.
 git clone https://github.com/lyemee/TailQuestions.git
 cd TailQuestions
 ./scripts/setup-signing.sh          # 로컬 서명 인증서 (한 번만 · 다시 빌드해도 권한 유지)
-./scripts/build-app.sh --install    # 빌드 → ~/Applications 에 설치 → 실행
+./scripts/build-app.sh --install    # 빌드 → /Applications 에 설치 → 실행
 ```
 
 | 스크립트 | 하는 일 |

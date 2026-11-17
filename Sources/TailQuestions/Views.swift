@@ -643,7 +643,7 @@ struct OnboardingView: View {
 
                 StepCard(number: 3, done: model.setup.accessibility,
                          title: "손쉬운 사용 권한",
-                         detail: "Claude 화면의 대화와 드래그한 텍스트를 읽기 위해 필요해요. 목록에서 TailQuestions를 켜 주세요.") {
+                         detail: "Claude 화면의 대화와 드래그한 텍스트를 읽기 위해 필요해요. 목록에 이미 있는 TailQuestions의 스위치를 켜 주세요.") {
                     if !model.setup.accessibility {
                         Button("설정 열기") { Permissions.openAccessibility() }
                             .buttonStyle(PillButtonStyle())

@@ -25,11 +25,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
         ) { [weak self] note in
-            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-                  app.bundleIdentifier == AXReader.claudeBundleID else { return }
-            // 창 순서가 바뀐 직후에 맞추도록 아주 잠깐 뒤에 실행
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                MainActor.assumeIsolated { self?.panel.claudeActivated() }
+            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+            let isClaude = app.bundleIdentifier == AXReader.claudeBundleID
+            let isSelf = app.processIdentifier == ProcessInfo.processInfo.processIdentifier
+            MainActor.assumeIsolated {
+                if isClaude {
+                    self?.panel.claudeActivated()      // Claude로 돌아오면 바로 같이 올라옴
+                } else if !isSelf {
+                    self?.panel.otherAppActivated()    // 다른 앱이면 바로 Claude와 함께 뒤로
+                }
             }
         }
         NSWorkspace.shared.notificationCenter.addObserver(
@@ -40,6 +44,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let pid = app.processIdentifier
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { AXReader.enableWebAccessibility(pid: pid) }
         }
+
+        // 앱 위치가 바뀌었을 수 있으니 자동 실행을 켜 둔 경우 현재 위치로 다시 등록
+        if model.launchAtLogin { model.setLaunchAtLogin(true) }
 
         model.refreshConversation = { [weak self] in
             guard let self, let claude = AXReader.claudeApp() else { return }

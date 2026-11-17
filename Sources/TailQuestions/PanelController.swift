@@ -83,16 +83,37 @@ final class PanelController {
         dock()
     }
 
-    /// 패널을 Claude 창 바로 위 순서에 둔다. 다른 앱이 Claude를 가리면 패널도 그 앱 뒤에 있게 된다.
-    /// 패널을 직접 쓰는 중(키 창)일 때는 건드리지 않는다.
+    /// Claude(또는 이 패널)를 쓰는 중이면 패널을 Claude보다 항상 위(floating)에 둬서
+    /// Claude 창을 클릭해도 패널이 가려졌다 나타나는 깜빡임이 없게 한다.
+    /// 다른 앱으로 넘어가면 일반 창으로 내려 Claude 바로 위 순서에 둔다 → 그 앱에 Claude와 함께 가려진다.
     private func stickAbove(_ claudeWindow: Int) {
-        if panel.isKeyWindow && NSApp.isActive { return }
+        let front = NSWorkspace.shared.frontmostApplication
+        let claudeOrSelfFront = front?.bundleIdentifier == AXReader.claudeBundleID
+            || front?.processIdentifier == ProcessInfo.processInfo.processIdentifier
+
+        if claudeOrSelfFront {
+            if panel.level != .floating { panel.level = .floating }
+            return
+        }
+
+        if panel.level != .normal { panel.level = .normal }
         let order = AXReader.onScreenWindows().map(\.number)
-        let panelIndex = order.firstIndex(of: panel.windowNumber)
-        let claudeIndex = order.firstIndex(of: claudeWindow)
-        if panelIndex == nil || claudeIndex == nil || panelIndex! != claudeIndex! - 1 {
+        guard let panelIndex = order.firstIndex(of: panel.windowNumber),
+              let claudeIndex = order.firstIndex(of: claudeWindow) else {
+            panel.order(.above, relativeTo: claudeWindow)
+            return
+        }
+        // 패널이 Claude보다 뒤에 있을 때만 순서를 고친다 (불필요한 재정렬 = 깜빡임 방지)
+        if panelIndex > claudeIndex {
             panel.order(.above, relativeTo: claudeWindow)
         }
+    }
+
+    /// 다른 앱이 앞으로 오면 즉시 일반 창으로 내린다.
+    func otherAppActivated() {
+        guard wantsVisible, panel.isVisible, let claude = AXReader.claudeApp(),
+              let claudeWindow = AXReader.frontWindowNumber(pid: claude.processIdentifier) else { return }
+        stickAbove(claudeWindow)
     }
 
     /// Claude가 앞으로 나오는 순간 바로 따라 올라오게 (타이머를 기다리지 않고).

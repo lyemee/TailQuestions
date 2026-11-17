@@ -46,10 +46,15 @@ fi
 echo "✅ $APP ($(lipo -archs "$APP/Contents/MacOS/TailQuestions"))"
 
 if $INSTALL; then
-  mkdir -p "$HOME/Applications"
+  # 일반 앱처럼 /Applications 에 설치 (쓸 수 없으면 ~/Applications)
+  DEST=/Applications
+  [ -w "$DEST" ] || DEST="$HOME/Applications"
+  mkdir -p "$DEST"
   pkill -x TailQuestions 2>/dev/null || true
-  rm -rf "$HOME/Applications/TailQuestions.app"
-  cp -R "$APP" "$HOME/Applications/"
-  open "$HOME/Applications/TailQuestions.app"
-  echo "✅ ~/Applications/TailQuestions.app 설치 및 실행"
+  rm -rf "$DEST/TailQuestions.app"
+  # 예전 버전이 ~/Applications 에 있으면 정리
+  [ "$DEST" != "$HOME/Applications" ] && rm -rf "$HOME/Applications/TailQuestions.app"
+  cp -R "$APP" "$DEST/"
+  open "$DEST/TailQuestions.app"
+  echo "✅ $DEST/TailQuestions.app 설치 및 실행"
 fi
