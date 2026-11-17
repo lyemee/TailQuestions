@@ -173,13 +173,26 @@ enum AXReader {
 
     // MARK: 대화 읽기
 
-    /// claude.ai 웹 UI에서 메시지를 감싸는 요소의 CSS 클래스 단서.
-    private static func blockKind(of el: AXUIElement) -> TranscriptBlock.Kind? {
-        guard let classes = attr(el, "AXDOMClassList") as? [String], !classes.isEmpty else { return nil }
-        let joined = classes.joined(separator: " ")
-        if joined.contains("font-user-message") { return .user }
-        if joined.contains("font-claude-response") || joined.contains("font-claude-message") { return .assistant }
-        return nil
+    private static func classes(_ el: AXUIElement) -> [String] {
+        (attr(el, "AXDOMClassList") as? [String]) ?? []
+    }
+
+    /// 이 요소와 그 아래 몇 단계의 CSS 클래스로 내 질문/Claude 답변을 구분한다.
+    private static func classifyByClasses(_ el: AXUIElement) -> TranscriptBlock.Kind? {
+        var found: TranscriptBlock.Kind?
+        func visit(_ e: AXUIElement, _ depth: Int) {
+            guard found == nil, depth <= 5 else { return }
+            let joined = classes(e).joined(separator: " ").lowercased()
+            if joined.contains("user-message") || joined.contains("font-user") || joined.contains("message-user") {
+                found = .user; return
+            }
+            if joined.contains("claude-response") || joined.contains("font-claude") || joined.contains("assistant") {
+                found = .assistant; return
+            }
+            for c in children(e) { visit(c, depth + 1) }
+        }
+        visit(el, 0)
+        return found
     }
 
     private struct Leaf { var text: String; var top: CGFloat? }
@@ -193,6 +206,8 @@ enum AXReader {
             }
             return
         }
+        // 화면 낭독기 전용 숨김 텍스트(sr-only)는 건너뛴다
+        if classes(el).contains("sr-only") { return }
         for c in children(el) { collectText(c, into: &leaves, budget: &budget) }
     }
 
@@ -208,45 +223,128 @@ enum AXReader {
         return out.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func findMessages(_ el: AXUIElement, into blocks: inout [TranscriptBlock], budget: inout Int) {
+    /// 메시지 한 줄(`message-row`)을 감싸는 요소들을 찾는다.
+    private static func findMessageRows(_ el: AXUIElement, into rows: inout [AXUIElement], budget: inout Int) {
         guard budget > 0 else { return }
         budget -= 1
-        if let kind = blockKind(of: el) {
-            var leaves: [Leaf] = []
-            collectText(el, into: &leaves, budget: &budget)
-            let text = join(leaves)
-            if !text.isEmpty { blocks.append(TranscriptBlock(kind: kind, text: text)) }
+        if classes(el).contains(where: { $0.contains("message-row") }) {
+            rows.append(el)
             return
         }
-        for c in children(el) { findMessages(c, into: &blocks, budget: &budget) }
+        for c in children(el) { findMessageRows(c, into: &rows, budget: &budget) }
     }
 
-    private static func findWebArea(_ el: AXUIElement, depth: Int = 0) -> AXUIElement? {
-        if role(el) == "AXWebArea" { return el }
-        guard depth < 30 else { return nil }
+    private static func findAll(role wanted: String, in el: AXUIElement, depth: Int = 0, into out: inout [AXUIElement]) {
+        if role(el) == wanted { out.append(el); return }
+        guard depth < 30 else { return }
+        for c in children(el) { findAll(role: wanted, in: c, depth: depth + 1, into: &out) }
+    }
+
+    /// 대화 제목: 상단 헤더(dframe-header)의 제목 버튼.
+    private static func findTitle(in el: AXUIElement, depth: Int = 0) -> String? {
+        guard depth < 40 else { return nil }
+        if classes(el).contains(where: { $0.contains("dframe-header") }) {
+            var headings: [AXUIElement] = []
+            findAll(role: kAXHeadingRole as String, in: el, into: &headings)
+            for h in headings {
+                for e in [h] + children(h) {
+                    for key in [kAXTitleAttribute, kAXDescriptionAttribute, kAXValueAttribute] {
+                        if let t = attr(e, key) as? String, !t.trimmingCharacters(in: .whitespaces).isEmpty {
+                            return t
+                        }
+                    }
+                }
+            }
+            return nil
+        }
         for c in children(el) {
-            if let found = findWebArea(c, depth: depth + 1) { return found }
+            if let t = findTitle(in: c, depth: depth + 1) { return t }
         }
         return nil
     }
 
+    /// 진단용: 메시지 줄의 클래스 구조 (텍스트 내용 없이).
+    private static func rowSignature(_ el: AXUIElement) -> String {
+        var parts: [String] = []
+        func visit(_ e: AXUIElement, _ depth: Int) {
+            guard depth <= 3, parts.count < 12 else { return }
+            let c = classes(e)
+            if !c.isEmpty {
+                parts.append(String(repeating: ">", count: depth) + c.prefix(10).joined(separator: "."))
+            }
+            for k in children(e) { visit(k, depth + 1) }
+        }
+        visit(el, 0)
+        let x = frame(el).map { "x=\(Int($0.minX)) w=\(Int($0.width))" } ?? ""
+        return "[\(x)] " + parts.joined(separator: " | ")
+    }
+
     static func readConversation(pid: pid_t) -> Conversation? {
         guard let window = mainWindow(pid: pid) else { return nil }
-        let title = (attr(window, kAXTitleAttribute) as? String) ?? "Claude"
-        guard let web = findWebArea(window) else { return nil }
+
+        // 창 안에 웹 화면이 여러 개일 수 있다 → 메시지가 있는 쪽을 고른다
+        var webAreas: [AXUIElement] = []
+        findAll(role: "AXWebArea", in: window, into: &webAreas)
+        guard !webAreas.isEmpty else { return nil }
+
+        var rows: [AXUIElement] = []
+        var web = webAreas[0]
+        for w in webAreas {
+            var found: [AXUIElement] = []
+            var budget = 40_000
+            findMessageRows(w, into: &found, budget: &budget)
+            if !found.isEmpty { rows = found; web = w; break }
+        }
+
+        let windowTitle = (attr(window, kAXTitleAttribute) as? String) ?? "Claude"
+        let title = findTitle(in: web) ?? windowTitle
 
         var blocks: [TranscriptBlock] = []
-        var budget = 60_000
-        findMessages(web, into: &blocks, budget: &budget)
+        var methods: [String] = []
+        if !rows.isEmpty {
+            var budget = 80_000
+            var kinds: [TranscriptBlock.Kind?] = []
+            var texts: [String] = []
+            for row in rows {
+                var leaves: [Leaf] = []
+                collectText(row, into: &leaves, budget: &budget)
+                let text = join(leaves)
+                guard !text.isEmpty else { continue }
+                texts.append(text)
+                kinds.append(classifyByClasses(row))
+            }
+            // 클래스로 구분 못 한 줄은 '질문 → 답변이 번갈아 나온다'는 규칙으로 채운다
+            var previous: TranscriptBlock.Kind?
+            for (i, text) in texts.enumerated() {
+                let kind: TranscriptBlock.Kind
+                if let k = kinds[i] {
+                    kind = k
+                    methods.append("class")
+                } else {
+                    kind = previous == .user ? .assistant : .user
+                    methods.append("alternate")
+                }
+                blocks.append(TranscriptBlock(kind: kind, text: text))
+                previous = kind
+            }
+            let methodCount = Dictionary(grouping: methods, by: { $0 }).mapValues(\.count)
+            DebugLog.log("readConversation: webAreas=\(webAreas.count) rows=\(rows.count) blocks=\(blocks.count) 구분=\(methodCount)\n"
+                         + rows.prefix(3).map { "  row " + rowSignature($0) }.joined(separator: "\n"))
+        }
 
-        // 메시지 구분 단서를 못 찾으면 화면 전체 텍스트를 한 덩어리로 보낸다.
+        // 메시지 단서를 못 찾으면 화면 전체 텍스트를 한 덩어리로 보낸다.
         if blocks.isEmpty {
-            var leaves: [Leaf] = []
-            var b = 60_000
-            collectText(web, into: &leaves, budget: &b)
-            let text = join(leaves)
-            guard !text.isEmpty else { return nil }
-            blocks = [TranscriptBlock(kind: .unknown, text: text)]
+            var best = ""
+            for w in webAreas {
+                var leaves: [Leaf] = []
+                var b = 60_000
+                collectText(w, into: &leaves, budget: &b)
+                let text = join(leaves)
+                if text.count > best.count { best = text }
+            }
+            guard !best.isEmpty else { return nil }
+            blocks = [TranscriptBlock(kind: .unknown, text: best)]
+            DebugLog.log("readConversation: message-row 없음 → 전체 텍스트 \(best.count)자 한 덩어리")
         }
         return Conversation(title: title, blocks: blocks)
     }
