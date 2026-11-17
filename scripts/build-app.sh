@@ -10,6 +10,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/TailQuestions "$APP/Contents/MacOS/"
 cp Resources/Info.plist "$APP/Contents/"
+cp Resources/AppIcon.icns "$APP/Contents/Resources/"
 IDENTITY="TailQuestions Local Signing"
 if security find-certificate -c "$IDENTITY" >/dev/null 2>&1; then
   # 고정 인증서로 서명 → 다시 빌드해도 손쉬운 사용 권한이 유지됨

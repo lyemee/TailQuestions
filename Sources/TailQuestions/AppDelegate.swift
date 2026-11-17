@@ -23,6 +23,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AXReader.enableWebAccessibility(pid: claude.processIdentifier)
         }
         NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                  app.bundleIdentifier == AXReader.claudeBundleID else { return }
+            // 창 순서가 바뀐 직후에 맞추도록 아주 잠깐 뒤에 실행
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                MainActor.assumeIsolated { self?.panel.claudeActivated() }
+            }
+        }
+        NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main
         ) { note in
             guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,

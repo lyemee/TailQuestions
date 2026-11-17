@@ -1,3 +1,5 @@
+<p align="center"><img src="Resources/icon.png" width="160" alt="TailQuestions 아이콘"></p>
+
 # TailQuestions (꼬리질문)
 
 Claude 데스크톱 앱 옆에 붙어 다니는 **꼬리질문 패널**이에요.
@@ -158,3 +160,4 @@ security delete-certificate -c "TailQuestions Local Signing"   # 서명 인증�
 | `HotKey.swift` / `Keychain.swift` / `DebugLog.swift` | 전역 단축키 / API 키 저장 / 진단 로그 |
 | `scripts/setup-signing.sh` | 로컬 서명 인증서 생성 (권한 유지용) |
 | `scripts/build-app.sh` | `.app` 빌드, 서명, 설치 |
+| `scripts/make-icon.swift` | 앱 아이콘 생성 (`swift scripts/make-icon.swift . && iconutil -c icns build/AppIcon.iconset -o Resources/AppIcon.icns`) |

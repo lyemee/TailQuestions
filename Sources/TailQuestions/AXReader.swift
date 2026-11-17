@@ -105,6 +105,36 @@ enum AXReader {
 
     // MARK: 창 위치
 
+    /// 지금 보고 있는 데스크탑(Space)에 이 앱의 일반 창이 화면에 떠 있는지.
+    /// 최소화·숨김 상태이거나 다른 데스크탑에 있으면 false. (화면 기록 권한 없이도 동작)
+    static func hasVisibleWindow(pid: pid_t) -> Bool {
+        frontWindowNumber(pid: pid) != nil
+    }
+
+    /// 지금 데스크탑에 보이는 이 앱의 가장 앞쪽 일반 창 번호. (창 목록은 앞→뒤 순서)
+    static func frontWindowNumber(pid: pid_t) -> Int? {
+        onScreenWindows().first { $0.pid == pid && $0.isNormal }?.number
+    }
+
+    struct WindowInfo { var number: Int; var pid: pid_t; var isNormal: Bool }
+
+    /// 화면에 보이는 창 목록 (앞→뒤 순서). 화면 기록 권한 없이도 번호·소유 앱·크기는 읽을 수 있다.
+    static func onScreenWindows() -> [WindowInfo] {
+        guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+                as? [[String: Any]] else { return [] }
+        return list.compactMap { info in
+            guard let number = info[kCGWindowNumber as String] as? Int,
+                  let pid = info[kCGWindowOwnerPID as String] as? pid_t else { return nil }
+            var normal = false
+            if (info[kCGWindowLayer as String] as? Int) == 0,
+               let boundsDict = info[kCGWindowBounds as String] as? NSDictionary,
+               let bounds = CGRect(dictionaryRepresentation: boundsDict) {
+                normal = bounds.width > 200 && bounds.height > 200
+            }
+            return WindowInfo(number: number, pid: pid, isNormal: normal)
+        }
+    }
+
     private static func mainWindow(pid: pid_t) -> AXUIElement? {
         let appEl = AXUIElementCreateApplication(pid)
         if let w = element(appEl, kAXFocusedWindowAttribute) { return w }
