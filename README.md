@@ -102,7 +102,6 @@ git pull
 |---|---|
 | 가지(꼬리질문) 기록 | `~/Library/Application Support/TailQuestions/threads.json` |
 | 진단 로그 (대화 내용 없이 길이·개수만) | `~/Library/Application Support/TailQuestions/debug.log` |
-| API 키 (API 키 방식일 때만) | 키체인 `com.lyemee.TailQuestions` |
 
 ### 문제 해결
 
@@ -132,7 +131,7 @@ security delete-certificate -c "TailQuestions Local Signing"   # 서명 인증�
 2. 대화 전체(main)를 맥락으로, 선택한 부분과 질문을 함께 Claude에게 보내요.
    Claude는 그 대화를 이어서 하는 것처럼 답하지만, 답은 패널에만 남아요.
 3. 연결 방식은 두 가지예요 (설정에서 선택).
-   - **Claude 구독 (기본값)**: 설치된 Claude Code CLI(`claude -p`)로 질문해요.
+   - **Claude 구독 (기본값)**: 설치된 Claude Code CLI(`claude -p`)로 질문해요. (추천)
      로그인된 구독을 그대로 써서 추가 요금이 없고, 구독 사용량에서 차감돼요.
      도구·설정·MCP 서버는 모두 끈 채로 실행되고, Claude Code 기록에도 남지 않아요.
    - **Anthropic API 키**: API를 직접 호출해요. 구독과 별도로 사용량만큼 요금이 나가요.
