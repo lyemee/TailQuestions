@@ -52,11 +52,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func readConversation(pid: pid_t) async -> Conversation? {
-        AXReader.enableWebAccessibility(pid: pid)
-        if let conv = AXReader.readConversation(pid: pid) { return conv }
-        // 접근성 트리가 막 켜진 경우 잠시 기다렸다가 다시 시도
-        try? await Task.sleep(nanoseconds: 600_000_000)
-        return AXReader.readConversation(pid: pid)
+        let setResult = AXReader.enableWebAccessibility(pid: pid)
+        // 접근성 트리가 막 켜진 경우 만들어질 때까지 잠깐씩 기다리며 다시 시도
+        for attempt in 0..<6 {
+            if let conv = AXReader.readConversation(pid: pid) {
+                if attempt > 0 { DebugLog.log("readConversation: \(attempt)번 재시도 후 성공") }
+                return conv
+            }
+            try? await Task.sleep(nanoseconds: 400_000_000)
+        }
+        DebugLog.log("readConversation 실패 (AXManualAccessibility=\(setResult.rawValue)). 화면 구조:\n"
+                     + AXReader.structureSummary(pid: pid))
+        return nil
     }
 
     private func setupStatusItem() {

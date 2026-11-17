@@ -17,7 +17,12 @@ final class PanelController {
             defer: false
         )
         panel.title = "꼬리질문"
+        panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
+        // 빈 툴바로 타이틀바를 키워서 신호등 버튼과 헤더가 한 줄에 오게 한다
+        panel.toolbar = NSToolbar(identifier: "TailQuestionsToolbar")
+        panel.toolbarStyle = .unifiedCompact
+        panel.isMovableByWindowBackground = true
         // 항상 위에 뜨는 창이 아니라 일반 창. Claude 창 바로 위에 붙여서 같은 높이로 움직인다.
         panel.isFloatingPanel = false
         panel.level = .normal
@@ -25,7 +30,7 @@ final class PanelController {
         panel.isReleasedWhenClosed = false
         // 모든 데스크탑에 고정하지 않고, 다시 보여줄 때 현재 데스크탑으로 옮겨 온다.
         panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
-        panel.minSize = NSSize(width: 300, height: 400)
+        panel.minSize = NSSize(width: 320, height: 420)
         panel.contentView = NSHostingView(rootView: PanelRootView().environmentObject(model))
         panel.center()
 

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import ServiceManagement
 import SwiftUI
@@ -64,13 +65,61 @@ final class AppModel: ObservableObject {
 
     private var sendTask: Task<Void, Never>?
 
-    init() { load() }
+    /// README 스크린샷 생성용 (가짜 신호등 버튼 표시, 디스크에 저장 안 함)
+    let snapshotMode: Bool
+
+    init(snapshotMode: Bool = false) {
+        self.snapshotMode = snapshotMode
+        if !snapshotMode { load() }
+    }
 
     var isReady: Bool {
         switch backend {
-        case .claudeCode: return ClaudeCodeClient.binaryPath != nil
+        case .claudeCode: return setup.claudeCodePath != nil && setup.loggedIn != false
         case .api: return hasAPIKey
         }
+    }
+
+    // MARK: 처음 설정
+
+    struct SetupStatus {
+        var claudeCodePath: String? = ClaudeCodeClient.binaryPath
+        var loggedIn: Bool?
+        var accessibility = AXReader.isTrusted(prompt: false)
+        var claudeDesktop = NSWorkspace.shared.urlForApplication(withBundleIdentifier: AXReader.claudeBundleID) != nil
+    }
+
+    @Published var setup = SetupStatus()
+    @Published var showOnboarding = !UserDefaults.standard.bool(forKey: "onboarded")
+    @Published var loggingIn = false
+    private var loginProcess: Process?
+
+    func refreshSetup() async {
+        guard !snapshotMode else { return }
+        var s = SetupStatus()
+        s.loggedIn = await ClaudeCodeClient.isLoggedIn()
+        setup = s
+    }
+
+    func login() {
+        loginProcess?.terminate()
+        loginProcess = ClaudeCodeClient.startLogin()
+        guard loginProcess != nil else { return }
+        loggingIn = true
+        Task {
+            // 브라우저에서 로그인을 마칠 때까지 최대 3분 동안 확인
+            for _ in 0..<90 {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                if await ClaudeCodeClient.isLoggedIn() == true { break }
+            }
+            await refreshSetup()
+            loggingIn = false
+        }
+    }
+
+    func finishOnboarding() {
+        UserDefaults.standard.set(true, forKey: "onboarded")
+        showOnboarding = false
     }
 
     var current: TailThread? {
@@ -80,7 +129,9 @@ final class AppModel: ObservableObject {
 
     /// 트리에 보여줄 대화: Claude 화면에서 읽은 것, 없으면 보고 있던 가지의 대화.
     var activeConversation: Conversation? {
-        conversation ?? current?.conversation ?? threads.first?.conversation
+        [conversation, current?.conversation, threads.first?.conversation]
+            .compactMap { $0 }
+            .first { !$0.blocks.isEmpty }
     }
 
     func branches(of conv: Conversation) -> [TailThread] {
@@ -265,6 +316,7 @@ final class AppModel: ObservableObject {
     }
 
     private func save() {
+        guard !snapshotMode else { return }
         guard let data = try? JSONEncoder().encode(threads) else { return }
         try? data.write(to: storeURL, options: .atomic)
     }

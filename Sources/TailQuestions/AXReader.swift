@@ -18,9 +18,31 @@ enum AXReader {
     }
 
     /// Electron 앱은 기본적으로 웹 콘텐츠의 접근성 트리를 숨긴다. 이 속성을 켜야 대화 내용이 보인다.
-    static func enableWebAccessibility(pid: pid_t) {
+    @discardableResult
+    static func enableWebAccessibility(pid: pid_t) -> AXError {
         let appEl = AXUIElementCreateApplication(pid)
-        AXUIElementSetAttributeValue(appEl, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+        return AXUIElementSetAttributeValue(appEl, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+    }
+
+    /// 진단용: 창의 접근성 구조(역할·CSS 클래스·자식 수)만 기록한다. 텍스트 내용은 남기지 않는다.
+    static func structureSummary(pid: pid_t, maxNodes: Int = 250) -> String {
+        guard let window = mainWindow(pid: pid) else { return "(창을 찾지 못함)" }
+        var lines: [String] = []
+        var count = 0
+        func walk(_ el: AXUIElement, _ depth: Int) {
+            guard count < maxNodes, depth < 40 else { return }
+            count += 1
+            let kids = children(el)
+            var line = String(repeating: " ", count: depth) + role(el)
+            if let classes = attr(el, "AXDOMClassList") as? [String], !classes.isEmpty {
+                line += " ." + classes.prefix(4).map { String($0.prefix(30)) }.joined(separator: ".")
+            }
+            if !kids.isEmpty { line += " (\(kids.count))" }
+            lines.append(line)
+            for k in kids { walk(k, depth + 1) }
+        }
+        walk(window, 0)
+        return lines.joined(separator: "\n")
     }
 
     // MARK: 헬퍼

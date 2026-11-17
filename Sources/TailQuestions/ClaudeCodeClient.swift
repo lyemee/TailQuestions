@@ -3,7 +3,10 @@ import Foundation
 /// 설치된 Claude Code CLI(`claude -p`)를 통해 질문한다.
 /// Claude Code에 로그인된 구독(Pro/Max) 계정을 그대로 쓰므로 API 키가 필요 없다.
 struct ClaudeCodeClient {
-    static let binaryPath: String? = {
+    static let installCommand = "curl -fsSL https://claude.ai/install.sh | bash"
+
+    /// 설치 후 다시 확인할 수 있도록 매번 찾는다.
+    static var binaryPath: String? {
         let home = NSHomeDirectory()
         let candidates = [
             "\(home)/.local/bin/claude",
@@ -13,7 +16,50 @@ struct ClaudeCodeClient {
             "\(home)/.npm-global/bin/claude",
         ]
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
-    }()
+    }
+
+    private static var environment: [String: String] {
+        var env = ProcessInfo.processInfo.environment
+        let home = NSHomeDirectory()
+        env["PATH"] = "\(home)/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:" + (env["PATH"] ?? "")
+        return env
+    }
+
+    /// `claude auth status` → 로그인 여부. 확인할 수 없으면 nil.
+    static func isLoggedIn() async -> Bool? {
+        guard let bin = binaryPath else { return nil }
+        return await Task.detached {
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: bin)
+            p.arguments = ["auth", "status"]
+            p.environment = environment
+            let out = Pipe()
+            p.standardOutput = out
+            p.standardError = Pipe()
+            do { try p.run() } catch { return nil }
+            let data = out.fileHandleForReading.readDataToEndOfFile()
+            p.waitUntilExit()
+            if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let loggedIn = obj["loggedIn"] as? Bool {
+                return loggedIn
+            }
+            return p.terminationStatus == 0 ? true : false
+        }.value
+    }
+
+    /// `claude auth login` 실행 (브라우저가 열려 Claude 계정으로 로그인).
+    static func startLogin() -> Process? {
+        guard let bin = binaryPath else { return nil }
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: bin)
+        p.arguments = ["auth", "login"]
+        p.environment = environment
+        p.standardInput = Pipe()
+        p.standardOutput = Pipe()
+        p.standardError = Pipe()
+        try? p.run()
+        return p
+    }
 
     var binary: String
     var model: String
@@ -47,10 +93,7 @@ struct ClaudeCodeClient {
             "--no-session-persistence",    // Claude Code 기록에 남기지 않음
             "--model", model,
         ]
-        var env = ProcessInfo.processInfo.environment
-        let home = NSHomeDirectory()
-        env["PATH"] = "\(home)/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:" + (env["PATH"] ?? "")
-        process.environment = env
+        process.environment = Self.environment
 
         let stdin = Pipe(), stdout = Pipe(), stderr = Pipe()
         process.standardInput = stdin
