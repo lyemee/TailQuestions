@@ -99,12 +99,7 @@ curl -fsSL https://raw.githubusercontent.com/lyemee/TailQuestions/main/install.s
 
 ## 작동 방식
 
-```mermaid
-flowchart LR
-    A["Claude 데스크톱<br/>드래그 + ⌥⇧Space"] -->|손쉬운 사용 API로<br/>대화·선택 텍스트 읽기| B["TailQuestions 패널"]
-    B -->|대화 전체 + 선택 부분 + 질문| C["Claude Code<br/>(내 구독 로그인)"]
-    C -->|답변| B
-```
+<p align="center"><img src="docs/diagram-flow.png" width="760" alt="작동 방식: Claude 데스크톱에서 드래그 → TailQuestions가 대화와 선택 부분을 읽음 → Claude Code가 내 구독으로 답변"></p>
 
 1. `⌥ ⇧ Space` 를 누르면 macOS **손쉬운 사용 API** 로 Claude 앱 화면의 대화와 선택한 텍스트를 읽어요.
 2. 대화 전체(main)를 맥락으로, 선택한 부분과 질문을 함께 Claude에게 보내요.

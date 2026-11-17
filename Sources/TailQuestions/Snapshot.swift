@@ -16,6 +16,22 @@ enum Snapshot {
             m.setup.accessibility = false
             m.showOnboarding = true
         }
+        renderView("diagram-flow", into: dir, size: NSSize(width: 860, height: 250), FlowDiagram())
+    }
+
+    private static func renderView<V: View>(_ name: String, into dir: URL, size: NSSize, _ view: V) {
+        let host = NSHostingView(rootView: view)
+        host.frame = NSRect(origin: .zero, size: size)
+        let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.appearance = NSAppearance(named: .aqua)
+        window.contentView = host
+        host.layoutSubtreeIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
+        guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return }
+        host.cacheDisplay(in: host.bounds, to: rep)
+        let url = dir.appendingPathComponent("\(name).png")
+        try? rep.representation(using: .png, properties: [:])?.write(to: url)
+        print("✅ \(url.path)")
     }
 
     private static func render(_ name: String, into dir: URL, configure: (AppModel) -> Void) {
@@ -73,5 +89,72 @@ enum Snapshot {
             thread(q2, "", [(.user, "예시 하나만 더 들어줘")]),
         ]
         return m
+    }
+}
+
+
+/// README '작동 방식' 그림
+struct FlowDiagram: View {
+    var body: some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 0) {
+                step(icon: Image(systemName: "cursorarrow.and.square.on.square.dashed"), tint: Theme.text,
+                     title: "Claude 데스크톱", detail: "답변을 드래그하고\n⌥ ⇧ Space")
+                arrow("화면 읽기")
+                step(icon: Image(nsImage: AppIcon.image), tint: nil,
+                     title: "TailQuestions", detail: "대화 전체 + 선택 부분\n+ 내 꼬리질문")
+                arrow("질문")
+                step(icon: Image(systemName: "terminal"), tint: Theme.branch,
+                     title: "Claude Code", detail: "내 Claude 구독으로\n답변 생성")
+            }
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.uturn.backward").font(.system(size: 11, weight: .semibold))
+                Text("답변은 패널에만 남고, Claude 본 대화는 그대로예요")
+                    .font(.system(size: 12.5, weight: .medium))
+            }
+            .foregroundStyle(Theme.secondary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background(Capsule().fill(Theme.sunken))
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(RoundedRectangle(cornerRadius: 20).fill(Theme.bg))
+        .overlay(RoundedRectangle(cornerRadius: 20).stroke(Theme.border))
+    }
+
+    private func step(icon: Image, tint: Color?, title: String, detail: String) -> some View {
+        VStack(spacing: 10) {
+            Group {
+                if let tint {
+                    icon.font(.system(size: 20, weight: .medium)).foregroundStyle(tint)
+                        .frame(width: 44, height: 44)
+                        .background(RoundedRectangle(cornerRadius: 11).fill(Theme.sunken))
+                } else {
+                    icon.resizable().frame(width: 48, height: 48)
+                }
+            }
+            .frame(height: 48)
+            Text(title).font(.system(size: 14, weight: .bold))
+            Text(detail)
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize()
+        }
+        .frame(width: 190)
+        .padding(.vertical, 16)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Theme.surface))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.border))
+    }
+
+    private func arrow(_ label: String) -> some View {
+        VStack(spacing: 4) {
+            Text(label).font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.main)
+            Image(systemName: "arrow.right")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(Theme.main)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
