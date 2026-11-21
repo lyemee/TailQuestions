@@ -75,6 +75,9 @@ struct HeaderView: View {
 
             Spacer()
 
+            if inThread, let id = model.current?.id {
+                DeleteBranchButton(threadID: id)
+            }
             HistoryMenu()
             IconButton(systemName: model.docked ? "pin.fill" : "pin.slash",
                        active: model.docked,
@@ -87,6 +90,36 @@ struct HeaderView: View {
         }
         .padding(.trailing, 10)
         .frame(height: 40)
+    }
+}
+
+/// 가지 삭제: 한 번 누르면 "삭제" 확인 상태가 되고, 다시 누르면 지운다.
+struct DeleteBranchButton: View {
+    @EnvironmentObject var model: AppModel
+    let threadID: UUID
+    @State private var confirming = false
+
+    var body: some View {
+        if confirming {
+            Button {
+                model.delete(threadID)
+            } label: {
+                Text("가지 삭제")
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(Theme.danger))
+            }
+            .buttonStyle(.plain)
+            .help("한 번 더 누르면 이 가지를 지워요")
+            .task {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                confirming = false
+            }
+        } else {
+            IconButton(systemName: "trash", help: "이 가지 삭제") { confirming = true }
+        }
     }
 }
 
@@ -397,7 +430,9 @@ struct ThreadView: View {
                     VStack(alignment: .leading, spacing: 14) {
                         ContextCard(thread: thread)
                         ForEach(thread.messages) { m in
-                            MessageView(role: m.role, text: m.text)
+                            MessageView(role: m.role, text: m.text,
+                                        onDelete: m.role == .user && !model.isSending
+                                            ? { model.deleteQuestion(m.id, in: thread.id) } : nil)
                         }
                         if let streaming = model.streamingText {
                             if streaming.isEmpty {
@@ -481,11 +516,26 @@ struct ContextCard: View {
 struct MessageView: View {
     let role: ChatMessage.Role
     let text: String
+    /// 내 질문에만: 이 질문과 답변을 지운다.
+    var onDelete: (() -> Void)? = nil
+    @State private var hovering = false
 
     var body: some View {
         if role == .user {
-            HStack {
+            HStack(alignment: .center, spacing: 6) {
                 Spacer(minLength: 40)
+                if let onDelete {
+                    Button(action: onDelete) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Theme.danger)
+                            .frame(width: 22, height: 22)
+                            .background(Circle().fill(Theme.danger.opacity(0.1)))
+                    }
+                    .buttonStyle(.plain)
+                    .help("이 질문과 답변 삭제")
+                    .opacity(hovering ? 1 : 0)
+                }
                 Text(text)
                     .font(.system(size: 13))
                     .textSelection(.enabled)
@@ -493,6 +543,8 @@ struct MessageView: View {
                     .padding(.vertical, 8)
                     .background(RoundedRectangle(cornerRadius: 14).fill(Theme.mainSoft))
             }
+            .contentShape(Rectangle())
+            .onHover { hovering = $0 }
         } else {
             Text(markdown)
                 .font(.system(size: 13.5))

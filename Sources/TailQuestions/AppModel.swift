@@ -227,6 +227,19 @@ final class AppModel: ObservableObject {
         save()
     }
 
+    /// 가지 안의 질문 하나를 지운다: 그 질문과, 다음 질문 전까지 이어진 답변까지.
+    func deleteQuestion(_ messageID: UUID, in threadID: UUID) {
+        guard !isSending,
+              let t = threads.firstIndex(where: { $0.id == threadID }),
+              let start = threads[t].messages.firstIndex(where: { $0.id == messageID }) else { return }
+        var end = start + 1
+        let msgs = threads[t].messages
+        while end < msgs.count, msgs[end].role == .assistant { end += 1 }
+        threads[t].messages.removeSubrange(start..<end)
+        errorText = nil
+        save()
+    }
+
     func saveAPIKey(_ key: String) {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         Keychain.save(trimmed)
