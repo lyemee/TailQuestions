@@ -546,17 +546,127 @@ struct MessageView: View {
             .contentShape(Rectangle())
             .onHover { hovering = $0 }
         } else {
-            Text(markdown)
-                .font(.system(size: 13.5))
-                .lineSpacing(3)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(Array(MessageSegment.parse(text).enumerated()), id: \.offset) { _, seg in
+                    switch seg {
+                    case .prose(let t):
+                        Text(Self.markdown(t))
+                            .font(.system(size: 13.5))
+                            .lineSpacing(3)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    case .code(let lang, let code):
+                        CodeBlockView(language: lang, code: code)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
-    private var markdown: AttributedString {
+    private static func markdown(_ text: String) -> AttributedString {
         let opts = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
         return (try? AttributedString(markdown: text, options: opts)) ?? AttributedString(text)
+    }
+}
+
+/// 답변을 일반 글과 ``` 코드 블록으로 나눈다.
+enum MessageSegment {
+    case prose(String)
+    case code(language: String, code: String)
+
+    static func parse(_ text: String) -> [MessageSegment] {
+        var result: [MessageSegment] = []
+        var prose: [Substring] = []
+        var code: [Substring] = []
+        var lang = ""
+        var fence: String?   // 열린 코드 블록의 울타리 (``` 또는 ~~~ 등)
+
+        func flushProse() {
+            let t = prose.joined(separator: "\n").trimmingCharacters(in: .newlines)
+            if !t.trimmingCharacters(in: .whitespaces).isEmpty { result.append(.prose(t)) }
+            prose = []
+        }
+
+        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if let open = fence {
+                if trimmed.hasPrefix(open) && trimmed.allSatisfy({ $0 == open.first }) {
+                    result.append(.code(language: lang, code: code.joined(separator: "\n")))
+                    code = []; fence = nil
+                } else {
+                    code.append(line)
+                }
+            } else if let marker = Self.fenceMarker(trimmed) {
+                flushProse()
+                fence = marker
+                lang = String(trimmed.dropFirst(marker.count)).trimmingCharacters(in: .whitespaces)
+            } else {
+                prose.append(line)
+            }
+        }
+        // 답변이 아직 오는 중이라 닫히지 않은 코드 블록도 코드로 보여준다.
+        if fence != nil { result.append(.code(language: lang, code: code.joined(separator: "\n"))) }
+        flushProse()
+        return result
+    }
+
+    private static func fenceMarker(_ line: String) -> String? {
+        for ch in ["`", "~"] {
+            let run = line.prefix { String($0) == ch }
+            if run.count >= 3 { return String(run) }
+        }
+        return nil
+    }
+}
+
+/// 코드 블록: 고정폭 글꼴, 줄바꿈 없이 가로 스크롤, 언어 이름과 복사 버튼.
+struct CodeBlockView: View {
+    let language: String
+    let code: String
+    @State private var copied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(language.isEmpty ? "code" : language)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(Theme.secondary)
+                Spacer()
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(code, forType: .string)
+                    copied = true
+                    Task {
+                        try? await Task.sleep(nanoseconds: 1_500_000_000)
+                        copied = false
+                    }
+                } label: {
+                    Label(copied ? "복사됨" : "복사", systemImage: copied ? "checkmark" : "doc.on.doc")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(copied ? Theme.success : Theme.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("코드 복사")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+
+            Divider().overlay(Theme.border)
+
+            ScrollView(.horizontal, showsIndicators: true) {
+                Text(code)
+                    .font(.system(size: 12, design: .monospaced))
+                    .lineSpacing(2)
+                    .foregroundStyle(Theme.text)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: true, vertical: true)
+                    .padding(12)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.sunken))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.border, lineWidth: 1))
     }
 }
 
