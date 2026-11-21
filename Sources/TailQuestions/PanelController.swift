@@ -38,6 +38,11 @@ final class PanelController {
         NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: panel, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.wantsVisible = false }
         }
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.spaceChanged() }
+        }
     }
 
     var isKeyAndVisible: Bool { panel.isVisible && panel.isKeyWindow }
@@ -63,21 +68,39 @@ final class PanelController {
         timer = nil
     }
 
+    /// Claude 창이 연속으로 보인 횟수. 데스크탑 전환 애니메이션 중 잠깐 잡히는 걸 걸러낸다.
+    private var claudeSeenTicks = 0
+    /// 데스크탑을 옮긴 직후엔 잠깐 패널을 새로 띄우지 않는다 (전환 중 반짝임 방지).
+    private var suppressShowUntil = Date.distantPast
+
+    private func spaceChanged() {
+        claudeSeenTicks = 0
+        suppressShowUntil = Date().addingTimeInterval(0.6)
+    }
+
     private func tick() {
         guard wantsVisible else {
             timer?.invalidate()
             timer = nil
             return
         }
+        // Claude가 꺼져 있으면 지금 상태 그대로 둔다 (갑자기 앞으로 튀어나오지 않게).
+        guard let claude = AXReader.claudeApp() else { return }
+
         // Claude 창이 지금 데스크탑에 보일 때만 패널을 보여준다.
-        // (다른 데스크탑으로 이동, Claude 최소화·숨김 → 패널도 숨김. Claude가 안 켜져 있으면 그냥 보여줌)
-        guard let claude = AXReader.claudeApp() else {
-            if !panel.isVisible { panel.orderFrontRegardless() }
-            return
-        }
+        // (다른 데스크탑으로 이동, Claude 최소화·숨김 → 패널도 숨김)
         guard let claudeWindow = AXReader.frontWindowNumber(pid: claude.processIdentifier) else {
+            claudeSeenTicks = 0
             if panel.isVisible { panel.orderOut(nil) }
             return
+        }
+        claudeSeenTicks += 1
+
+        if !panel.isVisible {
+            // 숨겨져 있던 패널은 Claude 창이 확실히 이 데스크탑에 있을 때만 다시 띄운다.
+            guard claudeSeenTicks >= 2, Date() >= suppressShowUntil else { return }
+            dock()
+            panel.order(.above, relativeTo: claudeWindow)
         }
         stickAbove(claudeWindow)
         dock()
@@ -97,14 +120,19 @@ final class PanelController {
         }
 
         if panel.level != .normal { panel.level = .normal }
-        let order = AXReader.onScreenWindows().map(\.number)
+        let windows = AXReader.onScreenWindows()
+        let order = windows.map(\.number)
         guard let panelIndex = order.firstIndex(of: panel.windowNumber),
               let claudeIndex = order.firstIndex(of: claudeWindow) else {
             panel.order(.above, relativeTo: claudeWindow)
             return
         }
-        // 패널이 Claude보다 뒤에 있을 때만 순서를 고친다 (불필요한 재정렬 = 깜빡임 방지)
-        if panelIndex > claudeIndex {
+        // 패널이 Claude 바로 위가 아니면(뒤에 있거나, 다른 앱 창보다 앞에 떠 있으면) 순서를 고친다.
+        // 그 사이에 Claude 자신의 창만 있으면 그대로 둔다 (불필요한 재정렬 = 깜빡임 방지).
+        let claudePID = AXReader.claudeApp()?.processIdentifier
+        let misplaced = panelIndex > claudeIndex
+            || windows[(panelIndex + 1)..<claudeIndex].contains { $0.pid != claudePID && $0.isNormal }
+        if misplaced {
             panel.order(.above, relativeTo: claudeWindow)
         }
     }

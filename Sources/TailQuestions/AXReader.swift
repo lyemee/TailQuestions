@@ -148,7 +148,10 @@ enum AXReader {
             guard let number = info[kCGWindowNumber as String] as? Int,
                   let pid = info[kCGWindowOwnerPID as String] as? pid_t else { return nil }
             var normal = false
+            // 레이어 0, 투명하지 않고, 어느 정도 크기가 있는 창만 "보이는 창"으로 친다.
+            // (Electron이 숨겨 둔 투명 창 때문에 Claude가 안 보이는 데스크탑에서도 보인다고 착각하지 않게)
             if (info[kCGWindowLayer as String] as? Int) == 0,
+               (info[kCGWindowAlpha as String] as? Double ?? 1) > 0.01,
                let boundsDict = info[kCGWindowBounds as String] as? NSDictionary,
                let bounds = CGRect(dictionaryRepresentation: boundsDict) {
                 normal = bounds.width > 200 && bounds.height > 200
